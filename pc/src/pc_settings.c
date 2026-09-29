@@ -20,6 +20,7 @@ PCSettings g_pc_settings = {
     .master_volume = 100,
     .stick_deadzone = 12,
     .cstick_deadzone = 12,
+    .local_multiplayer = 0,
 };
 
 static const char* SETTINGS_FILE = "settings.ini";
@@ -52,6 +53,7 @@ static const char* DEFAULT_SETTINGS =
     "[Gameplay]\n"
     "# Disable Mr. Resetti: 0 = normal, 1 = disable\n"
     "disable_resetti = 0\n"
+    "local_multiplayer = 0\n"
     "\n"
     "# Shop upgrade visitor requirement (Nookington's needs a shopper from another town): 0 = required, 1 = not required\n"
     "disable_shop_visitor_req = 0\n"
@@ -120,6 +122,8 @@ static void apply_setting(const char* key, const char* value) {
         if (val >= 0 && val <= 40) g_pc_settings.stick_deadzone = val;
     } else if (strcmp(key, "cstick_deadzone") == 0) {
         if (val >= 0 && val <= 40) g_pc_settings.cstick_deadzone = val;
+    } else if (strcmp(key, "local_multiplayer") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.local_multiplayer = val;
     }
 }
 

@@ -9,8 +9,10 @@
 #define STICK_MAGNITUDE     80
 #define RUMBLE_DURATION_MS  200
 
-static SDL_GameController* g_controller = NULL;
-
+static SDL_GameController* g_controllers[2] = {
+    NULL,
+    NULL
+};
 /* deadzone percent (0-40) -> raw SDL axis threshold */
 static int deadzone_threshold(int percent) {
     if (percent < 0)  percent = 0;
@@ -19,24 +21,26 @@ static int deadzone_threshold(int percent) {
 }
 
 /* is a remappable pad binding currently held? */
-static int pad_code_pressed(PCPadCode code) {
+static int pad_code_pressed(SDL_GameController* controller,PCPadCode code) {
     if (code < 0) return 0;
+    if (controller = NULL) return 0;
+        
     if (code & PC_PAD_AXIS_BIT) {
-        return SDL_GameControllerGetAxis(g_controller,
+        return SDL_GameControllerGetAxis(controller,
             (SDL_GameControllerAxis)(code & 0xFF)) > PC_PAD_AXIS_PRESS;
     }
-    return SDL_GameControllerGetButton(g_controller, (SDL_GameControllerButton)code);
+    return SDL_GameControllerGetButton(controller, (SDL_GameControllerButton)code);
 }
 
 /* analog trigger value for the L/R binding (digital bindings read as full press) */
-static u8 pad_trigger_value(PCPadCode code) {
+static u8 pad_trigger_value(SDL_GameController* controller,PCPadCode code) {
     if (code < 0) return 0;
     if (code & PC_PAD_AXIS_BIT) {
-        s16 v = SDL_GameControllerGetAxis(g_controller, (SDL_GameControllerAxis)(code & 0xFF));
+        s16 v = SDL_GameControllerGetAxis(controller, (SDL_GameControllerAxis)(code & 0xFF));
         if (v < 0) v = 0;
         return (u8)(v >> 7);
     }
-    return SDL_GameControllerGetButton(g_controller, (SDL_GameControllerButton)code) ? 255 : 0;
+    return SDL_GameControllerGetButton(controller, (SDL_GameControllerButton)code) ? 255 : 0;
 }
 
 BOOL PADInit(void) {
@@ -118,18 +122,18 @@ u32 PADRead(PADStatus* status) {
     }
     if (g_controller) {
         PCPadBindings* pb = &g_pc_padbindings;
-        if (pad_code_pressed(pb->a))     buttons |= PAD_BUTTON_A;
-        if (pad_code_pressed(pb->b))     buttons |= PAD_BUTTON_B;
-        if (pad_code_pressed(pb->x))     buttons |= PAD_BUTTON_X;
-        if (pad_code_pressed(pb->y))     buttons |= PAD_BUTTON_Y;
-        if (pad_code_pressed(pb->start)) buttons |= PAD_BUTTON_START;
-        if (pad_code_pressed(pb->z))     buttons |= PAD_TRIGGER_Z;
-        if (pad_code_pressed(pb->l))     buttons |= PAD_TRIGGER_L;
-        if (pad_code_pressed(pb->r))     buttons |= PAD_TRIGGER_R;
-        if (pad_code_pressed(pb->dpad_up))    buttons |= PAD_BUTTON_UP;
-        if (pad_code_pressed(pb->dpad_down))  buttons |= PAD_BUTTON_DOWN;
-        if (pad_code_pressed(pb->dpad_left))  buttons |= PAD_BUTTON_LEFT;
-        if (pad_code_pressed(pb->dpad_right)) buttons |= PAD_BUTTON_RIGHT;
+        if (pad_code_pressed(g_controllers[0],pb->a))     buttons |= PAD_BUTTON_A;
+        if (pad_code_pressed(g_controllers[0],pb->b))     buttons |= PAD_BUTTON_B;
+        if (pad_code_pressed(g_controllers[0],pb->x))     buttons |= PAD_BUTTON_X;
+        if (pad_code_pressed(g_controllers[0],pb->y))     buttons |= PAD_BUTTON_Y;
+        if (pad_code_pressed(g_controllers[0],pb->start)) buttons |= PAD_BUTTON_START;
+        if (pad_code_pressed(g_controllers[0],pb->z))     buttons |= PAD_TRIGGER_Z;
+        if (pad_code_pressed(g_controllers[0],pb->l))     buttons |= PAD_TRIGGER_L;
+        if (pad_code_pressed(g_controllers[0],pb->r))     buttons |= PAD_TRIGGER_R;
+        if (pad_code_pressed(g_controllers[0],pb->dpad_up))    buttons |= PAD_BUTTON_UP;
+        if (pad_code_pressed(g_controllers[0],pb->dpad_down))  buttons |= PAD_BUTTON_DOWN;
+        if (pad_code_pressed(g_controllers[0],pb->dpad_left))  buttons |= PAD_BUTTON_LEFT;
+        if (pad_code_pressed(g_controllers[0],pb->dpad_right)) buttons |= PAD_BUTTON_RIGHT;
 
         int stick_dz  = deadzone_threshold(g_pc_settings.stick_deadzone);
         int cstick_dz = deadzone_threshold(g_pc_settings.cstick_deadzone);
@@ -160,8 +164,8 @@ u32 PADRead(PADStatus* status) {
             cstickY = (s8)sry;
         }
 
-        status[0].triggerLeft  = pad_trigger_value(pb->l);
-        status[0].triggerRight = pad_trigger_value(pb->r);
+        status[0].triggerLeft  = pad_trigger_value(g_controllers[0],pb->l);
+        status[0].triggerRight = pad_trigger_value(g_controllers[0],pb->r);
     }
 
     status[0].button = buttons;
