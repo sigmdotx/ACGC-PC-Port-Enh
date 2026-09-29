@@ -47,3 +47,12 @@ temp/
 include/PR/
 include/gcc/
 include/compiler/gcc/stdlib.h
+
+
+# Game disc images - NEVER COMMIT
+*.iso
+*.gcm
+*.ciso
+
+# Local save data
+*.gci
