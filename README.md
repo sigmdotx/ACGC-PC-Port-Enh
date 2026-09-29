@@ -1,4 +1,4 @@
-# Animal Crossing PC Port
+# ACGC-PC-Port-Enh is an unofficial enhanced fork of flyngmt/ACGC-PC-Port focused on cooperative multiplayer and extended gameplay systems.
 
 A native PC port of Animal Crossing (GameCube) built on top of the [ac-decomp](https://github.com/ACreTeam/ac-decomp) decompilation project.
 
