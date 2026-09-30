@@ -316,10 +316,11 @@ extern u32 pc_frame_counter; /* incremented in VIWaitForRetrace */
 
 static void padmgr_UpdatePC(void) {
     PADStatus pad_status[MAXCONTROLLERS];
+    u32 connected_mask;
     int i;
 
     JW_JUTGamePad_read();
-    PADRead(pad_status);
+    connected_mask = PADRead(pad_status);
 
     /* Convert PADStatus (GC format) to OSContPad (N64 format).
        PADRead returns GC button masks; the game uses N64-style button constants.
@@ -333,26 +334,71 @@ static void padmgr_UpdatePC(void) {
     for (i = 0; i < MAXCONTROLLERS; i++) {
         u16 gc = pad_status[i].button;
         u16 n64 = 0;
-        if (gc & 0x0100) n64 |= 0x8000; /* A */
-        if (gc & 0x0200) n64 |= 0x4000; /* B */
-        if (gc & 0x0400) n64 |= 0x0040; /* X */
-        if (gc & 0x0800) n64 |= 0x0080; /* Y */
-        if (gc & 0x1000) n64 |= 0x1000; /* START */
-        if (gc & 0x0010) n64 |= 0x2000; /* Z */
-        if (gc & 0x0020) n64 |= 0x0010; /* R */
-        if (gc & 0x0040) n64 |= 0x0020; /* L */
-        if (gc & 0x0008) n64 |= 0x0800; /* D-Up */
-        if (gc & 0x0004) n64 |= 0x0400; /* D-Down */
-        if (gc & 0x0001) n64 |= 0x0200; /* D-Left */
-        if (gc & 0x0002) n64 |= 0x0100; /* D-Right */
-        if (pad_status[i].substickX >= 29)  n64 |= 0x0001; /* C-Right */
-        if (pad_status[i].substickX <= -29) n64 |= 0x0002; /* C-Left */
-        if (pad_status[i].substickY >= 29)  n64 |= 0x0008; /* C-Up */
-        if (pad_status[i].substickY <= -29) n64 |= 0x0004; /* C-Down */
+        if (gc & 0x0100)
+            n64 |= 0x8000; /* A */
+        if (gc & 0x0200)
+            n64 |= 0x4000; /* B */
+        if (gc & 0x0400)
+            n64 |= 0x0040; /* X */
+        if (gc & 0x0800)
+            n64 |= 0x0080; /* Y */
+        if (gc & 0x1000)
+            n64 |= 0x1000; /* START */
+        if (gc & 0x0010)
+            n64 |= 0x2000; /* Z */
+        if (gc & 0x0020)
+            n64 |= 0x0010; /* R */
+        if (gc & 0x0040)
+            n64 |= 0x0020; /* L */
+        if (gc & 0x0008)
+            n64 |= 0x0800; /* D-Up */
+        if (gc & 0x0004)
+            n64 |= 0x0400; /* D-Down */
+        if (gc & 0x0001)
+            n64 |= 0x0200; /* D-Left */
+        if (gc & 0x0002)
+            n64 |= 0x0100; /* D-Right */
+        if (pad_status[i].substickX >= 29)
+            n64 |= 0x0001; /* C-Right */
+        if (pad_status[i].substickX <= -29)
+            n64 |= 0x0002; /* C-Left */
+        if (pad_status[i].substickY >= 29)
+            n64 |= 0x0008; /* C-Up */
+        if (pad_status[i].substickY <= -29)
+            n64 |= 0x0004; /* C-Down */
         this->cur_pads[i].button = n64;
         this->cur_pads[i].stick_x = pad_status[i].stickX;
         this->cur_pads[i].stick_y = pad_status[i].stickY;
         this->cur_pads[i].errno = 0; /* CONT_NO_ERROR */
+    }
+    /*
+     * TEMPORARY MVP0 DEBUG:
+     * Show changes coming specifically from Player 2 / PAD1.
+     */
+    {
+        static u16 last_buttons = 0;
+        static s8 last_x = 0;
+        static s8 last_y = 0;
+
+        u16 buttons = this->cur_pads[1].button;
+        s8 x = this->cur_pads[1].stick_x;
+        s8 y = this->cur_pads[1].stick_y;
+
+        if (buttons != last_buttons ||
+            x != last_x ||
+            y != last_y) {
+
+            printf(
+                "[MVP0] PAD1 buttons=%04X stick=(%d,%d)\n",
+                buttons,
+                x,
+                y
+            );
+
+            last_buttons = buttons;
+            last_x = x;
+            last_y = y;
+        }
     }
 
     {
@@ -365,10 +411,15 @@ static void padmgr_UpdatePC(void) {
              * out. Buttons reliably go to 0 on release. */
             int any_button = 0;
             for (i = 0; i < MAXCONTROLLERS; i++) {
-                if (this->cur_pads[i].button != 0) { any_button = 1; break; }
+                if (this->cur_pads[i].button != 0) {
+                    any_button = 1;
+                    break;
+                }
             }
-            if (any_button) suppress = 1;
-            else            g_pc_pause_input_drain = 0;
+            if (any_button)
+                suppress = 1;
+            else
+                g_pc_pause_input_drain = 0;
         }
         if (suppress) {
             for (i = 0; i < MAXCONTROLLERS; i++) {
@@ -379,8 +430,19 @@ static void padmgr_UpdatePC(void) {
         }
     }
 
-    /* Always report PAD0 as connected (keyboard is always available) */
-    this->device_type[0] = PADMGR_TYPE_CONTROLLER;
+    /*
+     * Update PC controller connection state from PADRead().
+     *
+     * PAD0 is always present because keyboard input is available.
+     * PAD1 is present when the second physical controller was opened.
+     */
+    for (i = 0; i < MAXCONTROLLERS; i++) {
+        if (connected_mask & (PAD_CHAN0_BIT >> i)) {
+            this->device_type[i] = PADMGR_TYPE_CONTROLLER;
+        } else {
+            this->device_type[i] = PADMGR_TYPE_NONE;
+        }
+    }
 
     /* Process cur_pads into pads (button triggers, stick deltas, etc.) */
     padmgr_HandleDoneReadPadMsg();

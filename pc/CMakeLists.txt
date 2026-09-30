@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 # The NDEBUG define below ensures asserts stay disabled regardless of build type.
 
 # Options
-option(PC_CONSOLE "Show console window (disables -mwindows, useful for debugging)" OFF)
+option(PC_CONSOLE "Show console window (disables -mwindows, useful for debugging)" ON)
 
 # =============================================================================
 # 32-bit enforcement (required: JSystem casts pointers to u32)
