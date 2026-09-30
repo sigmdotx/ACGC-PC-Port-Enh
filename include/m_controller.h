@@ -41,6 +41,9 @@ extern void mCon_dt();
 extern void mCon_calc(MCON* mcon, f32 stick_x, f32 stick_y);
 extern void mCon_main(GAME* game);
 
+extern void mCon_SetActivePad(int pad);
+extern int mCon_GetActivePad(void);
+
 extern int chkButton(u16 button);
 extern u16 getButton();
 extern int chkTrigger(u16 button);
