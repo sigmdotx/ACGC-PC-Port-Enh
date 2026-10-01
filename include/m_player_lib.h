@@ -36,6 +36,11 @@ extern u16* mPlib_get_player_face_pallet_p(GAME* game);
 extern void mPlib_change_player_cloth(GAME* game, u16 cloth_idx);
 extern void mPlib_change_player_face_pallet(GAME* game);
 extern void mPlib_change_player_face(GAME* game);
+#ifdef PC_ENHANCEMENTS
+extern void mPlib_RegisterPlayerSlot(int slot, PLAYER_ACTOR* player);
+extern void mPlib_UnregisterPlayerActor(PLAYER_ACTOR* player);
+extern PLAYER_ACTOR* mPlib_GetPlayerSlot(int slot);
+#endif
 extern PLAYER_ACTOR* get_player_actor_withoutCheck(GAME_PLAY* play);
 extern int mPlib_get_player_actor_main_index(GAME* game);
 extern int mPlib_get_player_actor_request_main_index(GAME* game);

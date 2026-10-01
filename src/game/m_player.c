@@ -34,14 +34,14 @@ static xyz_t l_wade_end_pos = { 0.0f, 0.0f, 0.0f };
 /* Static function declarations, add as needed for intellisense */
 static void Player_actor_Item_Setup_main(ACTOR* actor, int now, int last);
 static mActor_name_t Player_actor_Get_ItemNoSubmenu(void);
-static int Player_actor_request_main_broken_axe_type_swing(GAME* game, xyz_t* pos, mActor_name_t hit_item,
-                                                           int hit_ut_x, int hit_ut_z, int priority);
+static int Player_actor_request_main_broken_axe_type_swing(GAME* game, xyz_t* pos, mActor_name_t hit_item, int hit_ut_x,
+                                                           int hit_ut_z, int priority);
 static int Player_actor_request_main_swing_axe_all(GAME* game, xyz_t* pos, mActor_name_t hit_item, u16 damage_no,
                                                    int hit_ut_x, int hit_ut_z, int priority);
 static int Player_actor_request_main_broken_axe_type_reflect(GAME* game, xyz_t* pos, mActor_name_t hit_item,
                                                              ACTOR* hit_actor, int priority);
-static int Player_actor_request_main_reflect_axe_all(GAME* game, xyz_t* pos, mActor_name_t hit_item,
-                                                     u16 damage_no, ACTOR* hit_actor, int priority);
+static int Player_actor_request_main_reflect_axe_all(GAME* game, xyz_t* pos, mActor_name_t hit_item, u16 damage_no,
+                                                     ACTOR* hit_actor, int priority);
 static int Player_actor_request_main_air_axe_all(GAME* game, int priority);
 static int Player_actor_request_main_rotate_umbrella_all(GAME* game, int prio);
 static int Player_actor_request_main_swing_fan_all(GAME* game, int start_swing, int prio);
@@ -309,8 +309,8 @@ static int Player_actor_request_main_release_creature_all(GAME* game, int type, 
                                                           ACTOR* release_actor_p, int prio);
 static int Player_actor_request_main_complete_payment(GAME* game, int prio);
 static int Player_actor_request_main_push(GAME* game, int ftr_no, s16 angle_y, xyz_t* pos, int priority);
-static int Player_actor_request_main_pull(GAME* game, int ftr_no, s16 angle, const xyz_t* start_pos, const xyz_t* end_pos,
-                                          const xyz_t* ofs, int priority);
+static int Player_actor_request_main_pull(GAME* game, int ftr_no, s16 angle, const xyz_t* start_pos,
+                                          const xyz_t* end_pos, const xyz_t* ofs, int priority);
 static int Player_actor_request_main_rotate_furniture(GAME* game, int ftr_no, s16 angle, xyz_t* pos, int type,
                                                       int priority);
 static int Player_actor_request_main_open_furniture(GAME* game, s16 angle, xyz_t* pos, int anim_idx, int priority);
@@ -517,9 +517,16 @@ static void Player_actor_init_value(ACTOR* actorx, GAME* game) {
     player->actor_class.scale.x = 0.01f;
     player->actor_class.scale.y = 0.01f;
     player->actor_class.scale.z = 0.01f;
-    player->balloon_actor = Actor_info_make_actor(&((GAME_PLAY*)game)->actor_info, game, mAc_PROFILE_BALLOON,
-                                                  actorx->world.position.x, actorx->world.position.y,
-                                                  actorx->world.position.z, 0, 0, 0, -1, -1, -1, EMPTY_NO, -1, -1, -1);
+#ifdef PC_ENHANCEMENTS
+    if (mPlib_GetPlayerSlot(1) == player) {
+        player->balloon_actor = NULL;
+    } else
+#endif
+    {
+        player->balloon_actor = Actor_info_make_actor(
+            &((GAME_PLAY*)game)->actor_info, game, mAc_PROFILE_BALLOON, actorx->world.position.x,
+            actorx->world.position.y, actorx->world.position.z, 0, 0, 0, -1, -1, -1, EMPTY_NO, -1, -1, -1);
+    }
     player->animation0_idx = -1;
     player->animation1_idx = -1;
     player->part_table_idx = -1;
@@ -637,9 +644,59 @@ static void Player_actor_init_value(ACTOR* actorx, GAME* game) {
 
     Player_actor_Set_old_sound_frame_counter(actorx);
 }
+#ifdef PC_ENHANCEMENTS
 
+static void Player_actor_ct_secondary(ACTOR* actorx, GAME* game) {
+    PLAYER_ACTOR* player = (PLAYER_ACTOR*)actorx;
+
+    actorx->status_data.weight = 50;
+
+    /*
+     * Inicialización por instancia:
+     * colisiones, estados internos, callbacks, etc.
+     */
+    Player_actor_init_value(actorx, game);
+
+    /*
+     * Igual que el player normal, pero sin tocar cámara,
+     * submenu, FIELD_DRAW ni DMA/request global.
+     */
+    Shape_Info_init(actorx, 0.0f, &mAc_ActorShadowCircle, 18.0f, 18.0f);
+    actorx->shape_info.ofs_y = 200.0f;
+
+    /*
+     * Cuando creemos P2 lo haremos una vez que P1 ya haya
+     * terminado su DMA, por lo que los recursos estarán disponibles.
+     */
+    cKF_SkeletonInfo_R_ct(&player->keyframe0, mPlib_get_player_mdl_p(), NULL, player->joint_data, player->morph_data);
+
+    player->keyframe1 = player->keyframe0;
+
+    /*
+     * Estado inicial fijo: WAIT.
+     */
+    player->requested_main_index = mPlayer_INDEX_WAIT;
+    player->requested_main_index_data.wait.morph_speed = -5.0f;
+    player->requested_main_index_data.wait.flags = 0;
+    player->requested_main_index_data.wait._04 = 0.0f;
+
+    Player_actor_setup_main_Wait(actorx, game);
+}
+
+#endif
 extern void Player_actor_ct(ACTOR* actorx, GAME* game) {
     GAME_PLAY* play = (GAME_PLAY*)game;
+#ifdef PC_ENHANCEMENTS
+    if (mPlib_GetPlayerSlot(0) == NULL) {
+        /* Primer PLAYER_ACTOR de la escena: P1 legacy. */
+        mPlib_RegisterPlayerSlot(0, (PLAYER_ACTOR*)actorx);
+    } else if (mPlib_GetPlayerSlot(1) == NULL) {
+        /* Segundo PLAYER_ACTOR: P2 secundario. */
+        mPlib_RegisterPlayerSlot(1, (PLAYER_ACTOR*)actorx);
+        Player_actor_ct_secondary(actorx, game);
+        return;
+    }
+#endif
 
     if (mEv_IsTitleDemo()) {
         actorx->status_data.weight = 255;
@@ -663,7 +720,13 @@ extern void Player_actor_ct(ACTOR* actorx, GAME* game) {
 
 extern void Player_actor_dt(ACTOR* actorx, GAME* game) {
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actorx;
-
+#ifdef PC_ENHANCEMENTS
+    if (mPlib_GetPlayerSlot(1) == player) {
+        Player_actor_dt_forCorect(actorx, game);
+        mPlib_UnregisterPlayerActor(player);
+        return;
+    }
+#endif
     Player_actor_dt_forCorect(actorx, game); //
     Common_Set(player_actor_exists, FALSE);
     mPlib_cancel_player_warp_forEvent();              //
@@ -680,6 +743,9 @@ extern void Player_actor_dt(ACTOR* actorx, GAME* game) {
                 break;
         }
     }
+#ifdef PC_ENHANCEMENTS
+    mPlib_UnregisterPlayerActor((PLAYER_ACTOR*)actorx);
+#endif
 }
 
 typedef void (*mPlayer_REQUEST_MAIN_CHANGE_FROM_SUBMENU_PROC)(ACTOR*, GAME*);
@@ -1455,142 +1521,140 @@ static void Player_actor_main_Demo_get_golden_axe_wait(ACTOR*, GAME*);
 
 #ifdef PC_ENHANCEMENTS
 
-    static int WrapToolSlot(int slot) {
-        if (slot < 0) {
-            return mPr_POCKETS_SLOT_COUNT - 1;
-        }
-        if (slot >= mPr_POCKETS_SLOT_COUNT) {
-            return 0;
-        }
-        return slot;
+static int WrapToolSlot(int slot) {
+    if (slot < 0) {
+        return mPr_POCKETS_SLOT_COUNT - 1;
+    }
+    if (slot >= mPr_POCKETS_SLOT_COUNT) {
+        return 0;
+    }
+    return slot;
+}
+
+#define IS_CUSTOM_UMBRELLA(item) ((item) >= ITM_MY_ORG_UMBRELLA0 && (item) <= ITM_MY_ORG_UMBRELLA7)
+
+/* next slot the cycle search starts from; after a putaway, the slot holding the put-away tool */
+static int last_tool_slot = 0;
+static int last_direction = 0;
+
+static void TrySwitchToolSlot(GAME* game, int direction) {
+    Private_c* priv;
+    mActor_name_t held_item;
+    mActor_name_t slot_item;
+    int search_slot;
+    int i;
+
+    priv = Common_Get(now_private);
+    held_item = priv->equipment;
+
+    if (last_tool_slot < 0 || last_tool_slot >= mPr_POCKETS_SLOT_COUNT) {
+        last_tool_slot = 0;
     }
 
-    #define IS_CUSTOM_UMBRELLA(item) ((item) >= ITM_MY_ORG_UMBRELLA0 && (item) <= ITM_MY_ORG_UMBRELLA7)
+    /* try last used slot first */
+    if (held_item == EMPTY_NO) {
+        slot_item = priv->inventory.pockets[last_tool_slot];
 
-    /* next slot the cycle search starts from; after a putaway, the slot holding the put-away tool */
-    static int last_tool_slot = 0;
-    static int last_direction = 0;
-
-    static void TrySwitchToolSlot(GAME* game, int direction) {
-        Private_c* priv;
-        mActor_name_t held_item;
-        mActor_name_t slot_item;
-        int search_slot;
-        int i;
-
-        priv = Common_Get(now_private);
-        held_item = priv->equipment;
-
-        if (last_tool_slot < 0 || last_tool_slot >= mPr_POCKETS_SLOT_COUNT) {
-            last_tool_slot = 0;
+        if (mPr_GET_ITEM_COND(priv->inventory.item_conditions, last_tool_slot) == mPr_ITEM_COND_NORMAL &&
+            ITEM_IS_TOOL(slot_item)) {
+            priv->equipment = slot_item;
+            mPr_SetPossessionItem(priv, last_tool_slot, EMPTY_NO, 0);
+            Player_actor_request_main_takeout_item(game, mPlayer_REQUEST_PRIORITY_37);
+            return;
         }
+    }
 
-        /* try last used slot first */
-        if (held_item == EMPTY_NO) {
-            slot_item = priv->inventory.pockets[last_tool_slot];
+    /* direction changed, undo previous step so the search lands on the tool just swapped out */
+    if (last_direction != 0 && direction != last_direction) {
+        last_tool_slot = WrapToolSlot(last_tool_slot - last_direction);
+    }
 
-            if (mPr_GET_ITEM_COND(priv->inventory.item_conditions, last_tool_slot) == mPr_ITEM_COND_NORMAL &&
-                ITEM_IS_TOOL(slot_item)) {
-                priv->equipment = slot_item;
-                mPr_SetPossessionItem(priv, last_tool_slot, EMPTY_NO, 0);
-                Player_actor_request_main_takeout_item(game, mPlayer_REQUEST_PRIORITY_37);
-                return;
-            }
-        }
+    search_slot = last_tool_slot;
 
-        /* direction changed, undo previous step so the search lands on the tool just swapped out */
-        if (last_direction != 0 && direction != last_direction) {
-            last_tool_slot = WrapToolSlot(last_tool_slot - last_direction);
-        }
+    for (i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) {
+        slot_item = priv->inventory.pockets[search_slot];
 
-        search_slot = last_tool_slot;
-
-        for (i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) {
-            slot_item = priv->inventory.pockets[search_slot];
-
-            if (mPr_GET_ITEM_COND(priv->inventory.item_conditions, search_slot) == mPr_ITEM_COND_NORMAL &&
-                ITEM_IS_TOOL(slot_item)) {
-                if (held_item != EMPTY_NO && !IS_CUSTOM_UMBRELLA(held_item)) {
-                    mPr_SetPossessionItem(priv, search_slot, held_item, 0);
-                } else {
-                    mPr_SetPossessionItem(priv, search_slot, EMPTY_NO, 0);
-                }
-
-                priv->equipment = slot_item;
-                last_tool_slot = WrapToolSlot(search_slot + direction);
-                last_direction = direction;
-                Player_actor_request_main_takeout_item(game, mPlayer_REQUEST_PRIORITY_37);
-                return;
+        if (mPr_GET_ITEM_COND(priv->inventory.item_conditions, search_slot) == mPr_ITEM_COND_NORMAL &&
+            ITEM_IS_TOOL(slot_item)) {
+            if (held_item != EMPTY_NO && !IS_CUSTOM_UMBRELLA(held_item)) {
+                mPr_SetPossessionItem(priv, search_slot, held_item, 0);
+            } else {
+                mPr_SetPossessionItem(priv, search_slot, EMPTY_NO, 0);
             }
 
-            search_slot = WrapToolSlot(search_slot + direction);
+            priv->equipment = slot_item;
+            last_tool_slot = WrapToolSlot(search_slot + direction);
+            last_direction = direction;
+            Player_actor_request_main_takeout_item(game, mPlayer_REQUEST_PRIORITY_37);
+            return;
         }
+
+        search_slot = WrapToolSlot(search_slot + direction);
+    }
+}
+
+static void TryPutawayTool(GAME* game) {
+    Private_c* priv = Common_Get(now_private);
+    mActor_name_t held_item = priv->equipment;
+    int slot;
+
+    if (held_item == EMPTY_NO) {
+        return;
     }
 
-    static void TryPutawayTool(GAME* game) {
-        Private_c* priv = Common_Get(now_private);
-        mActor_name_t held_item = priv->equipment;
-        int slot;
-
-        if (held_item == EMPTY_NO) {
+    if (!IS_CUSTOM_UMBRELLA(held_item)) {
+        slot = mPr_GetPossessionItemIdx(priv, EMPTY_NO);
+        if (slot == -1) {
+            sAdo_SysTrgStart(0x100A);
             return;
         }
-
-        if (!IS_CUSTOM_UMBRELLA(held_item)) {
-            slot = mPr_GetPossessionItemIdx(priv, EMPTY_NO);
-            if (slot == -1) {
-                sAdo_SysTrgStart(0x100A);
-                return;
-            }
-            mPr_SetPossessionItem(priv, slot, held_item, 0);
-            last_tool_slot = slot;
-        }
-
-        priv->equipment = EMPTY_NO;
-        last_direction = 0;
-        Player_actor_request_main_putin_item(game, 0x25);
+        mPr_SetPossessionItem(priv, slot, held_item, 0);
+        last_tool_slot = slot;
     }
 
-    static void Player_actor_check_and_switch_tool(GAME* game) {
-        GAME_PLAY* play = (GAME_PLAY*)game;
-        PLAYER_ACTOR* player;
-        int main_index;
+    priv->equipment = EMPTY_NO;
+    last_direction = 0;
+    Player_actor_request_main_putin_item(game, 0x25);
+}
 
-        /* outdoors only, and not while a submenu is open or opening */
-        if (mFI_GET_TYPE(mFI_GetFieldId()) != mFI_FIELDTYPE2_FG ||
-            play->submenu.start_refuse ||
-            play->submenu.current_menu_type != mSM_OVL_NONE ||
-            play->submenu.menu_type != mSM_OVL_NONE) {
-            return;
-        }
+static void Player_actor_check_and_switch_tool(GAME* game) {
+    GAME_PLAY* play = (GAME_PLAY*)game;
+    PLAYER_ACTOR* player;
+    int main_index;
 
-        player = GET_PLAYER_ACTOR_GAME(game);
-
-        /* only during free movement (walk/run/stand/dash), not mid-demo */
-        main_index = player->now_main_index;
-        if (main_index < mPlayer_INDEX_WAIT || main_index > mPlayer_INDEX_DASH) {
-            return;
-        }
-
-        if (Player_actor_Check_is_demo_mode(main_index) != 0) {
-            return;
-        }
-        if (Player_actor_Check_is_demo_mode(player->requested_main_index) != 0) {
-            return;
-        }
-
-        if (chkTrigger(BUTTON_DLEFT)) {
-            TrySwitchToolSlot(game, -1);
-            return;
-        }
-        if (chkTrigger(BUTTON_DRIGHT)) {
-            TrySwitchToolSlot(game, 1);
-            return;
-        }
-        if (chkTrigger(BUTTON_DDOWN)) {
-            TryPutawayTool(game);
-        }
+    /* outdoors only, and not while a submenu is open or opening */
+    if (mFI_GET_TYPE(mFI_GetFieldId()) != mFI_FIELDTYPE2_FG || play->submenu.start_refuse ||
+        play->submenu.current_menu_type != mSM_OVL_NONE || play->submenu.menu_type != mSM_OVL_NONE) {
+        return;
     }
+
+    player = GET_PLAYER_ACTOR_GAME(game);
+
+    /* only during free movement (walk/run/stand/dash), not mid-demo */
+    main_index = player->now_main_index;
+    if (main_index < mPlayer_INDEX_WAIT || main_index > mPlayer_INDEX_DASH) {
+        return;
+    }
+
+    if (Player_actor_Check_is_demo_mode(main_index) != 0) {
+        return;
+    }
+    if (Player_actor_Check_is_demo_mode(player->requested_main_index) != 0) {
+        return;
+    }
+
+    if (chkTrigger(BUTTON_DLEFT)) {
+        TrySwitchToolSlot(game, -1);
+        return;
+    }
+    if (chkTrigger(BUTTON_DRIGHT)) {
+        TrySwitchToolSlot(game, 1);
+        return;
+    }
+    if (chkTrigger(BUTTON_DDOWN)) {
+        TryPutawayTool(game);
+    }
+}
 #endif
 
 extern void Player_actor_move(ACTOR* actorx, GAME* game) {
@@ -1719,7 +1783,116 @@ extern void Player_actor_move(ACTOR* actorx, GAME* game) {
     };
     PLAYER_ACTOR* player = (PLAYER_ACTOR*)actorx;
     int idx;
+#ifdef PC_ENHANCEMENTS
+    if (mPlib_GetPlayerSlot(1) == player) {
+        static MCON p2_mcon;
 
+        GAME_PLAY* play = (GAME_PLAY*)game;
+        f32 stick_x = game->pads[1].now.stick_x;
+        f32 stick_y = game->pads[1].now.stick_y;
+
+        mCon_calc(&p2_mcon, stick_x, stick_y);
+
+        if (p2_mcon.move_pR > 0.0f) {
+            f32 calc_frame;
+            s16 target_angle;
+
+            /*
+             * Entrar a WALK solamente una vez.
+             */
+            if (player->now_main_index != mPlayer_INDEX_WALK) {
+                int old_start_refuse = play->submenu.start_refuse;
+
+                player->requested_main_index = mPlayer_INDEX_WALK;
+                player->requested_main_index_data.walk.morph_speed = -5.0f;
+                player->requested_main_index_data.walk.flags = 4;
+
+                Player_actor_setup_main_Walk(actorx, game);
+
+                /*
+                 * setup_main_Base toca este estado global.
+                 * P2 no debe modificar el submenu de P1.
+                 */
+                play->submenu.start_refuse = old_start_refuse;
+            }
+
+            /*
+             * Misma transformación cámara->mundo que usa P1.
+             */
+            target_angle =
+                DEG2SHORT_ANGLE2(270.0f) +
+                p2_mcon.move_angle +
+                (s16)getCamera2AngleY(play);
+
+            actorx->world.angle.y = target_angle;
+            actorx->shape_info.rotation.y = target_angle;
+
+            /*
+             * WALK básico de P2.
+             */
+            actorx->speed = 4.875f * p2_mcon.move_pR;
+
+            Player_actor_Movement_Base(actorx);
+
+            /*
+             * Animación WALK real de esta instancia.
+             */
+            Player_actor_CulcAnimation_Walk(actorx, 1.0f, &calc_frame);
+
+            Player_actor_recover_lean_angle(actorx);
+            Player_actor_set_eye_pattern_normal(actorx);
+
+            Player_actor_ObjCheck_Walk(actorx, game);
+            Player_actor_BGcheck_Walk(actorx);
+            Player_actor_set_eye_PositionAndAngle(actorx);
+        } else {
+            /*
+             * Volver a WAIT solamente cuando dejamos de movernos.
+             */
+            if (player->now_main_index != mPlayer_INDEX_WAIT) {
+                int old_start_refuse = play->submenu.start_refuse;
+
+                player->requested_main_index = mPlayer_INDEX_WAIT;
+                player->requested_main_index_data.wait.morph_speed = -5.0f;
+                player->requested_main_index_data.wait.flags = 0;
+                player->requested_main_index_data.wait._04 = 0.0f;
+
+                Player_actor_setup_main_Wait(actorx, game);
+
+                play->submenu.start_refuse = old_start_refuse;
+            }
+
+            Player_actor_Movement_Wait(actorx);
+            Player_actor_CulcAnimation_Wait(actorx);
+
+            Player_actor_recover_lean_angle(actorx);
+            Player_actor_set_eye_pattern_normal(actorx);
+
+            Player_actor_ObjCheck_Wait(actorx, game);
+            Player_actor_BGcheck_Wait(actorx);
+            Player_actor_set_eye_PositionAndAngle(actorx);
+        }
+
+        return;
+    }
+#endif
+#ifdef PC_ENHANCEMENTS
+    if (mPlib_GetPlayerSlot(0) == player && mPlib_GetPlayerSlot(1) == NULL &&
+        player->now_main_index == mPlayer_INDEX_WAIT && mEv_IsNotTitleDemo() &&
+        mFI_GET_TYPE(mFI_GetFieldId()) == mFI_FIELDTYPE2_FG) {
+
+        GAME_PLAY* play = (GAME_PLAY*)game;
+        xyz_t p2_pos = actorx->world.position;
+
+        /* Un poco a la derecha de P1. */
+        p2_pos.x += 40.0f;
+        p2_pos.y = mCoBG_GetBgY_OnlyCenter_FromWpos2(p2_pos, 0.0f);
+
+        Actor_info_make_actor(&play->actor_info, game, mAc_PROFILE_PLAYER, p2_pos.x, p2_pos.y, p2_pos.z,
+                              actorx->world.angle.x, actorx->world.angle.y, actorx->world.angle.z, -1, -1, -1, EMPTY_NO,
+                              -1, -1, -1);
+    }
+#endif
     Player_actor_move_other_func1(actorx, game); //
     idx = player->now_main_index;
     if (mPlayer_MAIN_INDEX_VALID(idx) == FALSE || proc[idx] == NULL) {

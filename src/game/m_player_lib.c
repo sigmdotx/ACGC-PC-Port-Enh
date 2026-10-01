@@ -1297,7 +1297,48 @@ extern void mPlib_change_player_face(GAME* game) {
     mPlib_change_player_face_pallet(game);
 }
 
+#ifdef PC_ENHANCEMENTS
+
+#define MPLIB_PLAYER_SLOT_COUNT 2
+
+static PLAYER_ACTOR* l_player_slots[MPLIB_PLAYER_SLOT_COUNT] = {
+    NULL,
+    NULL
+};
+
+extern void mPlib_RegisterPlayerSlot(int slot, PLAYER_ACTOR* player) {
+    if (slot >= 0 && slot < MPLIB_PLAYER_SLOT_COUNT) {
+        l_player_slots[slot] = player;
+    }
+}
+
+extern void mPlib_UnregisterPlayerActor(PLAYER_ACTOR* player) {
+    int i;
+
+    for (i = 0; i < MPLIB_PLAYER_SLOT_COUNT; i++) {
+        if (l_player_slots[i] == player) {
+            l_player_slots[i] = NULL;
+        }
+    }
+}
+
+extern PLAYER_ACTOR* mPlib_GetPlayerSlot(int slot) {
+    if (slot >= 0 && slot < MPLIB_PLAYER_SLOT_COUNT) {
+        return l_player_slots[slot];
+    }
+
+    return NULL;
+}
+
+#endif
+
 extern PLAYER_ACTOR* get_player_actor_withoutCheck(GAME_PLAY* play) {
+#ifdef PC_ENHANCEMENTS
+    if (l_player_slots[0] != NULL) {
+        return l_player_slots[0];
+    }
+#endif
+
     return (PLAYER_ACTOR*)&play->actor_info.list[ACTOR_PART_PLAYER].actor[0];
 }
 
